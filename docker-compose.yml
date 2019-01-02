@@ -1,0 +1,88 @@
+version: '2'
+services:
+
+  vault:
+    image: vault:1.0.1
+    networks:
+      envoymesh:
+        aliases:
+          - vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=00000000-0000-0000-0000-000000000000
+    expose:
+     - "8200"
+    ports:
+      - "8200:8200"
+
+  vault_init:
+    image: vault:1.0.1
+    networks:
+      envoymesh:
+        aliases:
+          - vault_init
+    volumes:
+      - ./setup_vault.sh:/usr/bin/start_vault
+    entrypoint: "/usr/bin/start_vault"
+    depends_on:
+      - vault
+    environment:
+      - VAULT_TOKEN=00000000-0000-0000-0000-000000000000
+  
+  service1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./service1-envoy.yaml:/etc/service-envoy.yaml
+    networks:
+      envoymesh:
+        aliases:
+          - service1.precocity-labs.services
+    environment:
+      - SERVICE_NAME=1
+      - FLASK_PORT=8080
+      - SISTER_SERVICE_HOST=service2.precocity-labs.services
+      - PONG_SERVICE_URL=http://127.0.0.1:9150
+      - VAULT_TOKEN=00000000-0000-0000-0000-000000000000
+      - VAULT_ADDR=http://vault:8200
+      - APP_DOMAIN=service1.precocity-labs.services
+    expose:
+      - "443"
+      - "8081"
+    ports:
+      - "9090:443"
+      - "8081:8081"
+    depends_on:
+      - vault_init
+
+  service2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./service2-envoy.yaml:/etc/service-envoy.yaml
+    networks:
+      envoymesh:
+        aliases:
+          - service2.precocity-labs.services
+    environment:
+      - SERVICE_NAME=2
+      - FLASK_PORT=8080
+      - SISTER_SERVICE_HOST=service1.precocity-labs.services
+      - PONG_SERVICE_URL=http://127.0.0.1:9150
+      - VAULT_TOKEN=00000000-0000-0000-0000-000000000000
+      - VAULT_ADDR=http://vault:8200
+      - APP_DOMAIN=service2.precocity-labs.services
+    expose:
+      - "443"
+      - "8081"
+    ports:
+      - "9091:443"
+      - "8082:8081"
+    depends_on:
+      - vault_init
+
+networks:
+  envoymesh: {}
